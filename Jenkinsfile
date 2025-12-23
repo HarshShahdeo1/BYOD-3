@@ -2,47 +2,41 @@ pipeline {
     agent any
 
     environment {
-        /* Task 2: Infrastructure environment flags */
-        TF_IN_AUTOMATION = 'true' [cite: 7]
-        TF_CLI_ARGS = '-no-color' [cite: 7]
-
-        /* Task 2: Securely inject AWS credentials and SSH key ID */
-        /* Ensure 'aws-access-key-id' and 'aws-secret-access-key' exist in Jenkins Credentials */
-        AWS_ACCESS_KEY_ID     = credentials('aws-access-key-id') [cite: 8]
-        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key') [cite: 8]
-        
-        /* Task 2: Injecting the SSH key credential ID string */
-        /* Replace 'my-ssh-key' with the actual ID you created in Jenkins */
-        SSH_CRED_ID = 'my-ssh-key' [cite: 8]
+        // Task 2: Define environment block [cite: 7, 8]
+        TF_IN_AUTOMATION = 'true'
+        TF_CLI_ARGS = '-no-color'
+        AWS_CREDS = credentials('aws-creds') 
+        SSH_CRED_ID = credentials('SSH_CRED_ID')
     }
 
     stages {
-        stage('Initialization & Variable Inspection') {
+        // Task 3: Initialization & Inspection [cite: 9]
+        stage('Terraform Init & Inspect') {
             steps {
-                /* Task 3: Implement Terraform Initialization */
-                sh 'terraform init' [cite: 10]
-
-                /* Task 3: Display contents of branch-specific variable file for verification */
-                sh "cat ${env.BRANCH_NAME}.tfvars" [cite: 11]
+                sh 'terraform init' // [cite: 10]
+                // Display content of the branch-specific .tfvars file [cite: 11]
+                sh "cat ${env.BRANCH_NAME}.tfvars" 
             }
         }
 
+        // Task 4: Branch-Specific Planning [cite: 12]
         stage('Terraform Plan') {
             steps {
-                /* Task 4: Generate execution plan using the branch-specific variable file */
-                /* The planning details are automatically logged in the Jenkins console */
-                sh "terraform plan -var-file=${env.BRANCH_NAME}.tfvars" [cite: 13, 14]
+                // Generate plan using the branch-specific variable file [cite: 13]
+                // Output is automatically logged to Jenkins console [cite: 14]
+                sh "terraform plan -var-file=${env.BRANCH_NAME}.tfvars"
             }
         }
 
+        // Task 5: Conditional Manual Approval [cite: 15]
         stage('Validate Apply') {
-            /* Task 5: Conditional Gate - Only appears if the branch is 'dev' */
+            // Only trigger this stage if pushing to the 'dev' branch [cite: 17]
             when {
-                branch 'dev' [cite: 17]
+                branch 'dev'
             }
             steps {
-                /* Task 5: Manual Approval step for confirmation */
-                input message: "Do you want to proceed with the deployment to dev?", ok: "Approve" [cite: 16]
+                // Manual confirmation gate [cite: 16]
+                input message: "Do you want to proceed with the deployment to dev?", ok: "Approve"
             }
         }
     }
