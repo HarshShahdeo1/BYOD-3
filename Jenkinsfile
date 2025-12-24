@@ -14,24 +14,28 @@ pipeline {
             }
         }
 
-        stage('Terraform Plan') {
+        stage('Terraform Apply') {
             steps {
-                withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-creds']
-                ]) {
-                    sh "terraform plan -var-file=${BRANCH_NAME}.tfvars"
-                }
+                sh "terraform apply -auto-approve -var-file=${env.BRANCH_NAME}.tfvars"
             }
         }
 
-        stage('Validate Apply') {
-            when {
-                branch 'dev'
-            }
+        stage('Capture Terraform Outputs') {
             steps {
-                input message: "Do you want to proceed with the deployment to dev?",
-                      ok: "Approve"
+                script {
+                    env.INSTANCE_IP = sh(
+                        script: "terraform output -raw instance_public_ip",
+                        returnStdout: true
+                    ).trim()
+
+                    env.INSTANCE_ID = sh(
+                        script: "terraform output -raw instance_id",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Captured INSTANCE_IP = ${env.INSTANCE_IP}"
+                    echo "Captured INSTANCE_ID = ${env.INSTANCE_ID}"
+                }
             }
         }
     }
