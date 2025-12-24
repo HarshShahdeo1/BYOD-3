@@ -15,12 +15,13 @@ pipeline {
         }
 
         stage('Terraform Plan') {
-            environment {
-                AWS_ACCESS_KEY_ID     = credentials('aws-creds').usr
-                AWS_SECRET_ACCESS_KEY = credentials('aws-creds').psw
-            }
             steps {
-                sh "terraform plan -var-file=${BRANCH_NAME}.tfvars"
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-creds']
+                ]) {
+                    sh "terraform plan -var-file=${BRANCH_NAME}.tfvars"
+                }
             }
         }
 
