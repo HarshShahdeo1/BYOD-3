@@ -8,7 +8,7 @@ pipeline {
 
     stages {
         // -----------------------------
-        // Task 1: Provisioning
+        // Task 1: Provisioning & Output Capture
         // -----------------------------
         stage('Terraform Init') {
             steps {
@@ -18,48 +18,54 @@ pipeline {
 
         stage('Terraform Apply') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds'
-                ]]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                    // Task 1: Execute terraform apply with auto-approve [cite: 4]
                     sh 'terraform apply -auto-approve -var-file=dev.tfvars'
                 }
             }
         }
 
-        // -----------------------------
-        // Task 1 & 2: Output Capture & Inventory
-        // -----------------------------
-        stage('Capture Outputs & Create Inventory') {
+        stage('Capture Outputs') {
             steps {
                 script {
-                    // Task 1: Capture Variables [cite: 5]
+                    // Task 1: Capture instance_public_ip and instance_id into Jenkins env variables 
                     env.INSTANCE_IP = sh(script: 'terraform output -raw instance_public_ip', returnStdout: true).trim()
                     env.INSTANCE_ID = sh(script: 'terraform output -raw instance_id', returnStdout: true).trim()
 
                     echo "Captured EC2 IP: ${env.INSTANCE_IP}"
                     echo "Captured EC2 ID: ${env.INSTANCE_ID}"
+                }
+            }
+        }
 
-                    // Task 2: Create Dynamic Inventory File [cite: 7, 8]
+        // -----------------------------
+        // Task 2: Dynamic Inventory Management
+        // -----------------------------
+        stage('Create Inventory') {
+            steps {
+                script {
+                    // Task 2: Write captured INSTANCE_IP into dynamic_inventory.ini [cite: 7]
+                    // Formatted correctly for Ansible consumption [cite: 8]
                     sh "echo '[splunk]' > dynamic_inventory.ini"
                     sh "echo '${env.INSTANCE_IP} ansible_user=ec2-user ansible_ssh_private_key_file=byod3-key.pem ansible_ssh_common_args=\"-o StrictHostKeyChecking=no\"' >> dynamic_inventory.ini"
                     
+                    echo "Inventory file created successfully."
                     sh "cat dynamic_inventory.ini"
                 }
             }
         }
 
         // -----------------------------
-        // Task 3: AWS Health Verification
+        // Task 3: AWS Health Status Verification
         // -----------------------------
         stage('AWS Health Check') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
                     script {
-                        echo "Waiting for instance ${env.INSTANCE_ID} to be fully healthy..."
-                        // Task 3: Poll until 2/2 checks pass [cite: 10, 11]
+                        echo "Waiting for instance ${env.INSTANCE_ID} to reach 'ok' status..."
+                        // Task 3: Use AWS CLI wait command to poll health status 
                         sh "aws ec2 wait instance-status-ok --instance-ids ${env.INSTANCE_ID} --region us-east-1"
-                        echo "Instance is healthy. Proceeding..."
+                        echo "Instance health check passed. Proceeding to configuration."
                     }
                 }
             }
@@ -68,40 +74,37 @@ pipeline {
         // -----------------------------
         // Task 4: Splunk Installation & Testing
         // -----------------------------
-        stage('Splunk Installation & Testing') {
+        stage('Splunk Configuration') {
             steps {
                 script {
-                    echo "Starting Splunk Installation..."
-                    
-                    // Safety check: Fix key permissions if Terraform created it locally
+                    // Safety: Ensure key permissions are correct before Ansible runs
                     sh 'if [ -f byod3-key.pem ]; then chmod 400 byod3-key.pem; fi'
                     
-                    // Task 4 Part A: Install Splunk [cite: 13]
+                    // Task 4: Run installation and testing playbooks 
                     sh 'ansible-playbook -i dynamic_inventory.ini playbooks/splunk.yml'
-                    
-                    // Task 4 Part B: Verify Service is Active [cite: 14]
                     sh 'ansible-playbook -i dynamic_inventory.ini playbooks/test-splunk.yml'
                 }
             }
         }
 
         // -----------------------------
-        // Task 5: Destruction Gate
+        // Task 5: Infrastructure Destruction Gate
         // -----------------------------
         stage('Validate Destroy') {
+            // Task 5: Implement a Validate Destroy input gate [cite: 16]
             input {
-                message "Do you want to destroy the infrastructure?"
-                ok "Destroy"
+                message "Deployment complete. Verify Splunk at http://${env.INSTANCE_IP}:8000. Destroy infrastructure?"
+                ok "Destroy Now"
             }
             steps {
-                echo "Proceeding with destruction..."
+                echo "User validated destruction."
             }
         }
 
-        stage('Terraform Destroy') {
+        stage('Destroy Infrastructure') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-                    // Task 5: Destroy resources 
+                    // Task 5: Destroy stage using terraform destroy [cite: 16]
                     sh 'terraform destroy -auto-approve -var-file=dev.tfvars'
                 }
             }
@@ -109,30 +112,28 @@ pipeline {
     }
 
     // -----------------------------
-    // Task 5: Post-Build Cleanup
+    // Task 5: Post-Build Actions
     // -----------------------------
     post {
         always {
             script {
-                echo "Cleaning up temporary files..."
-                // Task 5: Ensure inventory file is deleted [cite: 17]
+                // Task 5: Ensure dynamic_inventory.ini is deleted [cite: 17]
                 sh 'rm -f dynamic_inventory.ini'
+                echo "Temporary inventory file removed."
             }
         }
         failure {
             script {
-                echo "Pipeline failed! Triggering automatic destroy..."
+                // Task 5: Auto-trigger destroy if pipeline fails [cite: 17]
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-                    // Task 5: Auto-destroy on failure [cite: 17]
                     sh 'terraform destroy -auto-approve -var-file=dev.tfvars'
                 }
             }
         }
         aborted {
             script {
-                echo "Pipeline aborted! Triggering automatic destroy..."
+                // Task 5: Auto-trigger destroy if pipeline is aborted [cite: 17]
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-                    // Task 5: Auto-destroy on abort [cite: 17]
                     sh 'terraform destroy -auto-approve -var-file=dev.tfvars'
                 }
             }
