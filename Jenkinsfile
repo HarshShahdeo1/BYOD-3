@@ -8,16 +8,19 @@ pipeline {
 
     stages {
 
-        stage('Terraform Init & Inspect') {
+        stage('Terraform Init') {
             steps {
                 sh 'terraform init'
-                sh "cat ${env.BRANCH_NAME}.tfvars"
             }
         }
 
         stage('Terraform Plan') {
+            environment {
+                AWS_ACCESS_KEY_ID     = credentials('aws-creds').usr
+                AWS_SECRET_ACCESS_KEY = credentials('aws-creds').psw
+            }
             steps {
-                sh "terraform plan -var-file=${env.BRANCH_NAME}.tfvars"
+                sh "terraform plan -var-file=${BRANCH_NAME}.tfvars"
             }
         }
 
