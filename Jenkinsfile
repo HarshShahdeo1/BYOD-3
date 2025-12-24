@@ -27,7 +27,8 @@ pipeline {
                 branch 'dev'
             }
             steps {
-                input message: "Do you want to proceed with the deployment to dev?", ok: "Approve"
+                input message: "Do you want to proceed with the deployment to dev?",
+                      ok: "Approve"
             }
         }
     }
