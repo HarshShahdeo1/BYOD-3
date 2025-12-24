@@ -4,7 +4,6 @@ pipeline {
     environment {
         TF_IN_AUTOMATION = 'true'
         TF_CLI_ARGS = '-no-color'
-        AWS_CREDS = credentials('aws-creds')
     }
 
     stages {
