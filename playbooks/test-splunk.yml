@@ -1,0 +1,16 @@
+---
+- name: Verify Splunk Installation
+  hosts: splunk
+  become: yes
+  tasks:
+    - name: Check if Splunk Service is Running
+      service:
+        name: splunk
+        state: started
+
+    - name: Wait for Splunk Web Port (8000) to be Open
+      wait_for:
+        port: 8000
+        delay: 5
+        timeout: 60
+        msg: "Splunk Web is not running on port 8000"

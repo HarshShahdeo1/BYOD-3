@@ -1,0 +1,30 @@
+---
+- name: Install Splunk Enterprise on EC2
+  hosts: splunk
+  become: yes
+  tasks:
+    - name: Download Splunk RPM
+      get_url:
+        url: "https://download.splunk.com/products/splunk/releases/9.0.0/linux/splunk-9.0.0-6818ac46f2ec-linux-2.6-x86_64.rpm"
+        dest: "/tmp/splunk-9.0.0.rpm"
+
+    - name: Install Splunk from RPM
+      yum:
+        name: "/tmp/splunk-9.0.0.rpm"
+        state: present
+
+    - name: Accept License and Create Admin User
+      command: >
+        /opt/splunk/bin/splunk enable boot-start 
+        --accept-license 
+        --answer-yes 
+        --no-prompt 
+        --seed-passwd Splunk@123
+      args:
+        creates: /etc/init.d/splunk
+
+    - name: Start Splunk Service
+      service:
+        name: splunk
+        state: started
+        enabled: yes
